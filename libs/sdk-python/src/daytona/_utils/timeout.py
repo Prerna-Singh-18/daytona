@@ -2,18 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import ctypes
 import functools
 import inspect
 import signal
 import sys
 import threading
 from typing import Callable, Optional, TypeVar
-
-try:
-    import stopit
-    HAS_STOPIT = True
-except ImportError:
-    HAS_STOPIT = False
 
 from ..common.errors import DaytonaError, DaytonaTimeoutError
 
@@ -26,6 +21,92 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 
+class _TimeoutMarker(BaseException):
+    """Internal marker exception for threading timeout.
+    
+    This is raised via PyThreadState_SetAsyncExc and then caught and converted
+    to DaytonaTimeoutError with a proper error message. We use BaseException
+    (not Exception) to ensure it's not accidentally caught by generic exception handlers.
+    """
+    pass
+
+
+def _async_raise(target_tid: int, exception: type) -> None:
+    """Raises an exception asynchronously in another thread.
+    
+    This uses the CPython API PyThreadState_SetAsyncExc to raise an exception
+    in a different thread. This allows interrupting blocking operations.
+    
+    Args:
+        target_tid: Target thread identifier
+        exception: Exception class to be raised in that thread
+        
+    Raises:
+        ValueError: If the thread ID is invalid
+        SystemError: If PyThreadState_SetAsyncExc fails
+    
+    Note:
+        Requires Python 3.7+ where thread IDs are unsigned long.
+    """
+    ret = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        ctypes.c_ulong(target_tid),
+        ctypes.py_object(exception)
+    )
+    if ret == 0:
+        raise ValueError(f"Invalid thread ID {target_tid}")
+    elif ret > 1:
+        # If it returns > 1, we need to clear it
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_ulong(target_tid), None)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
+
+
+class _ThreadingTimeout:
+    """Context manager for timeout using threading.Timer and async exception raising.
+    
+    This implements a timeout mechanism that raises DaytonaTimeoutError in the calling
+    thread after a specified duration. It properly executes finally blocks because
+    the exception is raised as if it came from within the protected code.
+    """
+    
+    def __init__(self, seconds: float, func_name: str):
+        """Initialize the threading timeout.
+        
+        Args:
+            seconds: Timeout duration in seconds
+            func_name: Name of the function being timed (for error messages)
+        """
+        self.seconds = seconds
+        self.func_name = func_name
+        self.target_tid = threading.current_thread().ident
+        self.timer: Optional[threading.Timer] = None
+        self.timed_out = False
+        
+    def _timeout_handler(self) -> None:
+        """Called by timer thread when timeout occurs."""
+        self.timed_out = True
+        if self.target_tid:
+            _async_raise(self.target_tid, _TimeoutMarker)
+    
+    def __enter__(self) -> "_ThreadingTimeout":
+        """Start the timeout timer."""
+        self.timer = threading.Timer(self.seconds, self._timeout_handler)
+        self.timer.start()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        """Stop the timeout timer and handle timeout exception."""
+        if self.timer:
+            self.timer.cancel()
+        
+        # If we timed out via our marker exception, convert to DaytonaTimeoutError
+        if exc_type is _TimeoutMarker and self.timed_out:
+            raise DaytonaTimeoutError(
+                f"Function '{self.func_name}' exceeded timeout of {self.seconds} seconds."
+            ) from None
+        
+        return False  # Don't suppress any exceptions
+
+
 def with_timeout() -> Callable[[Callable[P, T]], Callable[P, T]]:
     """Decorator to add timeout mechanism that executes finally blocks properly.
     
@@ -36,7 +117,7 @@ def with_timeout() -> Callable[[Callable[P, T]], Callable[P, T]]:
     Platform Support:
         - **Async functions**: All platforms (uses asyncio task cancellation)
         - **Sync functions (Unix/Linux, main thread)**: Uses SIGALRM signal
-        - **Sync functions (Windows or threads)**: Uses stopit.ThreadingTimeout
+        - **Sync functions (Windows or threads)**: Uses threading.Timer with async exception raising
     
     Behavior:
         - **Finally blocks**: Execute properly on timeout for both sync and async
@@ -53,7 +134,7 @@ def with_timeout() -> Callable[[Callable[P, T]], Callable[P, T]]:
     
     Raises:
         DaytonaTimeoutError: When the function exceeds the specified timeout.
-        DaytonaError: If timeout is negative or stopit is not installed (Windows/threads).
+        DaytonaError: If timeout is negative.
     
     Example:
         ```python
@@ -139,29 +220,10 @@ def with_timeout() -> Callable[[Callable[P, T]], Callable[P, T]]:
                     signal.alarm(0)
                     signal.signal(signal.SIGALRM, old_handler)
             
-            # Strategy 2: Windows or non-main thread - use stopit (cross-platform)
+            # Strategy 2: Windows or non-main thread - use threading timeout (cross-platform)
             else:
-                if not HAS_STOPIT:
-                    raise DaytonaError(
-                        f"Timeout for synchronous function '{func.__name__}' on Windows or in "
-                        "background threads requires the 'stopit' package. "
-                        "Install it with: pip install stopit"
-                    )
-                
-                # Use stopit's threading timeout
-                @stopit.threading_timeoutable()
-                def _wrapped():
+                with _ThreadingTimeout(timeout, func.__name__):
                     return func(*args, **kwargs)
-                
-                result = _wrapped(timeout=timeout)
-                
-                # stopit returns TimeoutException as the result when timeout occurs
-                if isinstance(result, type) and issubclass(result, BaseException):
-                    raise DaytonaTimeoutError(
-                        f"Function '{func.__name__}' exceeded timeout of {timeout} seconds."
-                    )
-                
-                return result
 
         return sync_wrapper
 
