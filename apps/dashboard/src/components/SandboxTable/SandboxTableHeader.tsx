@@ -25,6 +25,15 @@ import { TableColumnVisibilityToggle } from '../TableColumnVisibilityToggle'
 import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command'
 import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandInputButton,
+  CommandItem,
+  CommandList,
+} from '../ui/command'
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuPortal,
@@ -133,11 +142,8 @@ export function SandboxTableHeader({
           </PopoverTrigger>
           <PopoverContent className="w-[240px] p-0" align="start">
             <Command>
-              <div className="flex items-center gap-2  px-2 pt-2 pb-1">
-                <CommandInput placeholder="Search..." className="border border-border rounded-md h-8" />
-
-                <Button
-                  variant="link"
+              <CommandInput placeholder="Search...">
+                <CommandInputButton
                   aria-expanded={open}
                   className="justify-between"
                   onClick={() => {
@@ -146,8 +152,8 @@ export function SandboxTableHeader({
                   }}
                 >
                   Reset
-                </Button>
-              </div>
+                </CommandInputButton>
+              </CommandInput>
               <CommandList>
                 <CommandEmpty>No column found.</CommandEmpty>
                 <CommandGroup>
