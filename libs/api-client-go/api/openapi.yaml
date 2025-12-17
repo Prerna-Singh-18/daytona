@@ -1408,7 +1408,8 @@ paths:
         - sandbox
   /sandbox/paginated:
     get:
-      operationId: listSandboxesPaginated
+      deprecated: true
+      operationId: listSandboxesPaginated_deprecated
       parameters:
         - description: Use with JWT to specify the organization ID
           explode: false
@@ -1637,7 +1638,7 @@ paths:
             - openid
             - profile
             - email
-      summary: List all sandboxes paginated
+      summary: '[DEPRECATED] List all sandboxes paginated'
       tags:
         - sandbox
   /sandbox/for-runner:
