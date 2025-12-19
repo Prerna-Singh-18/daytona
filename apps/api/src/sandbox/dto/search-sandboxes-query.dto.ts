@@ -4,45 +4,50 @@
  */
 
 import { ApiProperty } from '@nestjs/swagger'
-import { IsBoolean, IsInt, IsOptional, IsString, IsArray, IsEnum, IsDate, Min } from 'class-validator'
+import { IsBoolean, IsOptional, IsString, IsArray, IsEnum, IsInt, Min, IsDate } from 'class-validator'
 import { Type } from 'class-transformer'
+import { SANDBOX_VALID_QUERY_STATES } from './list-sandboxes-query.dto'
 import { SandboxState } from '../enums/sandbox-state.enum'
 import { ToArray } from '../../common/decorators/to-array.decorator'
-import { PageNumber } from '../../common/decorators/page-number.decorator'
 import { PageLimit } from '../../common/decorators/page-limit.decorator'
-import { SANDBOX_VALID_QUERY_STATES } from './list-sandboxes-query.dto'
 
-export enum SandboxSortFieldDeprecated {
-  ID = 'id',
+export enum SandboxSearchSortField {
   NAME = 'name',
   STATE = 'state',
-  SNAPSHOT = 'snapshot',
-  REGION = 'region',
-  UPDATED_AT = 'updatedAt',
+  CPU = 'cpu',
+  MEMORY = 'memoryGiB',
+  DISK = 'diskGiB',
+  LAST_ACTIVITY_AT = 'lastActivityAt',
   CREATED_AT = 'createdAt',
 }
 
-export enum SandboxSortDirectionDeprecated {
+export enum SandboxSearchSortDirection {
   ASC = 'asc',
   DESC = 'desc',
 }
 
-export const DEFAULT_SANDBOX_SORT_FIELD_DEPRECATED = SandboxSortFieldDeprecated.CREATED_AT
-export const DEFAULT_SANDBOX_SORT_DIRECTION_DEPRECATED = SandboxSortDirectionDeprecated.DESC
+export const DEFAULT_SANDBOX_SEARCH_SORT_FIELD = SandboxSearchSortField.LAST_ACTIVITY_AT
+export const DEFAULT_SANDBOX_SEARCH_SORT_DIRECTION = SandboxSearchSortDirection.DESC
 
-export class ListSandboxesQueryDeprecatedDto {
-  @PageNumber(1)
-  page = 1
+export class SearchSandboxesQueryDto {
+  @ApiProperty({
+    name: 'cursor',
+    description: 'Pagination cursor from a previous response',
+    required: false,
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  cursor?: string
 
   @PageLimit(100)
   limit = 100
 
   @ApiProperty({
     name: 'id',
-    description: 'Filter by partial ID match',
+    description: 'Filter by ID prefix (case-insensitive)',
     required: false,
     type: String,
-    example: 'abc123',
   })
   @IsOptional()
   @IsString()
@@ -50,10 +55,9 @@ export class ListSandboxesQueryDeprecatedDto {
 
   @ApiProperty({
     name: 'name',
-    description: 'Filter by partial name match',
+    description: 'Filter by name prefix (case-insensitive)',
     required: false,
     type: String,
-    example: 'abc123',
   })
   @IsOptional()
   @IsString()
@@ -84,7 +88,7 @@ export class ListSandboxesQueryDeprecatedDto {
 
   @ApiProperty({
     name: 'states',
-    description: 'List of states to filter by',
+    description: 'List of states to filter by. Can not be combined with "name"',
     required: false,
     enum: SANDBOX_VALID_QUERY_STATES,
     isArray: true,
@@ -112,7 +116,7 @@ export class ListSandboxesQueryDeprecatedDto {
 
   @ApiProperty({
     name: 'regions',
-    description: 'List of regions to filter by',
+    description: 'List of regions IDs to filter by',
     required: false,
     type: [String],
   })
@@ -120,7 +124,7 @@ export class ListSandboxesQueryDeprecatedDto {
   @ToArray()
   @IsArray()
   @IsString({ each: true })
-  regions?: string[]
+  regionIds?: string[]
 
   @ApiProperty({
     name: 'minCpu',
@@ -201,6 +205,56 @@ export class ListSandboxesQueryDeprecatedDto {
   maxDiskGiB?: number
 
   @ApiProperty({
+    name: 'isPublic',
+    description: 'Filter by public status',
+    required: false,
+    type: Boolean,
+    default: undefined,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isPublic?: boolean
+
+  @ApiProperty({
+    name: 'isRecoverable',
+    description: 'Filter by recoverable status',
+    required: false,
+    type: Boolean,
+    default: undefined,
+  })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  isRecoverable?: boolean
+
+  @ApiProperty({
+    name: 'createdAtAfter',
+    description: 'Include items created after this timestamp',
+    required: false,
+    type: String,
+    format: 'date-time',
+    example: '2024-01-01T00:00:00Z',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  createdAtAfter?: Date
+
+  @ApiProperty({
+    name: 'createdAtBefore',
+    description: 'Include items created before this timestamp',
+    required: false,
+    type: String,
+    format: 'date-time',
+    example: '2024-12-31T23:59:59Z',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  createdAtBefore?: Date
+
+  @ApiProperty({
     name: 'lastEventAfter',
     description: 'Include items with last event after this timestamp',
     required: false,
@@ -230,21 +284,21 @@ export class ListSandboxesQueryDeprecatedDto {
     name: 'sort',
     description: 'Field to sort by',
     required: false,
-    enum: SandboxSortFieldDeprecated,
-    default: DEFAULT_SANDBOX_SORT_FIELD_DEPRECATED,
+    enum: SandboxSearchSortField,
+    default: DEFAULT_SANDBOX_SEARCH_SORT_FIELD,
   })
   @IsOptional()
-  @IsEnum(SandboxSortFieldDeprecated)
-  sort = DEFAULT_SANDBOX_SORT_FIELD_DEPRECATED
+  @IsEnum(SandboxSearchSortField)
+  sort = DEFAULT_SANDBOX_SEARCH_SORT_FIELD
 
   @ApiProperty({
     name: 'order',
     description: 'Direction to sort by',
     required: false,
-    enum: SandboxSortDirectionDeprecated,
-    default: DEFAULT_SANDBOX_SORT_DIRECTION_DEPRECATED,
+    enum: SandboxSearchSortDirection,
+    default: DEFAULT_SANDBOX_SEARCH_SORT_DIRECTION,
   })
   @IsOptional()
-  @IsEnum(SandboxSortDirectionDeprecated)
-  order = DEFAULT_SANDBOX_SORT_DIRECTION_DEPRECATED
+  @IsEnum(SandboxSearchSortDirection)
+  order = DEFAULT_SANDBOX_SEARCH_SORT_DIRECTION
 }

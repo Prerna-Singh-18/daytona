@@ -10,7 +10,9 @@ import { SandboxState } from '../enums/sandbox-state.enum'
 import { ToArray } from '../../common/decorators/to-array.decorator'
 import { PageLimit } from '../../common/decorators/page-limit.decorator'
 
-const VALID_QUERY_STATES = Object.values(SandboxState).filter((state) => state !== SandboxState.DESTROYED)
+export const SANDBOX_VALID_QUERY_STATES = Object.values(SandboxState).filter(
+  (state) => state !== SandboxState.DESTROYED,
+)
 
 export class ListSandboxesQueryDto {
   @ApiProperty({
@@ -31,7 +33,6 @@ export class ListSandboxesQueryDto {
     description: 'Filter by name prefix (case-sensitive). Can not be combined with "states"',
     required: false,
     type: String,
-    example: 'abc123',
   })
   @IsOptional()
   @IsString()
@@ -53,15 +54,15 @@ export class ListSandboxesQueryDto {
     name: 'states',
     description: 'List of states to filter by. Can not be combined with "name"',
     required: false,
-    enum: VALID_QUERY_STATES,
+    enum: SANDBOX_VALID_QUERY_STATES,
     isArray: true,
   })
   @IsOptional()
   @ToArray()
   @IsArray()
-  @IsEnum(VALID_QUERY_STATES, {
+  @IsEnum(SANDBOX_VALID_QUERY_STATES, {
     each: true,
-    message: `each value must be one of the following values: ${VALID_QUERY_STATES.join(', ')}`,
+    message: `each value must be one of the following values: ${SANDBOX_VALID_QUERY_STATES.join(', ')}`,
   })
   states?: SandboxState[]
 }

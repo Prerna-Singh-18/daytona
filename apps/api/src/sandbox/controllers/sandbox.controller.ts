@@ -76,6 +76,7 @@ import { SkipThrottle } from '@nestjs/throttler'
 import { ThrottlerScope } from '../../common/decorators/throttler-scope.decorator'
 import { SshGatewayGuard } from '../../auth/ssh-gateway.guard'
 import { ListSandboxesQueryDto } from '../dto/list-sandboxes-query.dto'
+import { SearchSandboxesQueryDto } from '../dto/search-sandboxes-query.dto'
 
 @ApiTags('sandbox')
 @Controller('sandbox')
@@ -114,6 +115,26 @@ export class SandboxController {
       includeErroredDestroyed,
       states,
     })
+  }
+
+  @Get('search')
+  @ApiOperation({
+    summary: 'Search sandboxes',
+    description: 'Advanced filtering and ordering. Eventually consistent.',
+    operationId: 'searchSandboxes',
+  })
+  @ApiResponse({
+    status: 200,
+    type: PaginatedSandboxesDto,
+  })
+  async searchSandboxes(
+    @AuthContext() authContext: OrganizationAuthContext,
+    @Query() queryParams: SearchSandboxesQueryDto,
+  ): Promise<PaginatedSandboxesDto> {
+    return {
+      items: [],
+      nextCursor: null,
+    }
   }
 
   @Get('paginated')

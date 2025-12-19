@@ -107,6 +107,12 @@ const configuration = {
       opensearchIndexName: process.env.AUDIT_PUBLISH_OPENSEARCH_INDEX_NAME || 'audit-logs',
     },
   },
+  sandbox: {
+    opensearch: {
+      enabled: process.env.SANDBOX_OPENSEARCH_ENABLED === 'true',
+      indexName: process.env.SANDBOX_OPENSEARCH_INDEX_NAME || 'sandboxes',
+    },
+  },
   kafka: {
     enabled: process.env.KAFKA_ENABLED === 'true',
     brokers: process.env.KAFKA_BROKERS || 'localhost:9092',

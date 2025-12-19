@@ -50,10 +50,10 @@ import { VolumeService } from './volume.service'
 import { PaginatedList } from '../../common/interfaces/paginated-list.interface'
 import { checkRecoverable } from '../utils/recoverable.util'
 import {
-  SandboxSortField,
-  SandboxSortDirection,
-  DEFAULT_SANDBOX_SORT_FIELD,
-  DEFAULT_SANDBOX_SORT_DIRECTION,
+  SandboxSortFieldDeprecated,
+  SandboxSortDirectionDeprecated,
+  DEFAULT_SANDBOX_SORT_FIELD_DEPRECATED,
+  DEFAULT_SANDBOX_SORT_DIRECTION_DEPRECATED,
 } from '../dto/list-sandboxes-query.deprecated.dto'
 import { createRangeFilter } from '../../common/utils/range-filter'
 import { LogExecution } from '../../common/decorators/log-execution.decorator'
@@ -71,6 +71,7 @@ import { PortPreviewUrlDto } from '../dto/port-preview-url.dto'
 import { RegionService } from '../../region/services/region.service'
 import { DefaultRegionRequiredException } from '../../organization/exceptions/DefaultRegionRequiredException'
 import { PaginatedSandboxesDto } from '../dto/paginated-sandboxes.dto'
+import { SandboxSearchSortDirection, SandboxSearchSortField } from '../dto/search-sandboxes-query.dto'
 
 const DEFAULT_CPU = 1
 const DEFAULT_MEMORY = 1
@@ -757,8 +758,8 @@ export class SandboxService {
       lastEventBefore?: Date
     },
     sort?: {
-      field?: SandboxSortField
-      direction?: SandboxSortDirection
+      field?: SandboxSortFieldDeprecated
+      direction?: SandboxSortDirectionDeprecated
     },
   ): Promise<PaginatedList<Sandbox>> {
     const pageNum = Number(page)
@@ -782,8 +783,10 @@ export class SandboxService {
       lastEventBefore,
     } = filters || {}
 
-    const { field: sortField = DEFAULT_SANDBOX_SORT_FIELD, direction: sortDirection = DEFAULT_SANDBOX_SORT_DIRECTION } =
-      sort || {}
+    const {
+      field: sortField = DEFAULT_SANDBOX_SORT_FIELD_DEPRECATED,
+      direction: sortDirection = DEFAULT_SANDBOX_SORT_DIRECTION_DEPRECATED,
+    } = sort || {}
 
     const baseFindOptions: FindOptionsWhere<Sandbox> = {
       organizationId,
@@ -829,7 +832,7 @@ export class SandboxService {
           direction: sortDirection,
           nulls: 'LAST',
         },
-        ...(sortField !== SandboxSortField.CREATED_AT && { createdAt: 'DESC' }),
+        ...(sortField !== SandboxSortFieldDeprecated.CREATED_AT && { createdAt: 'DESC' }),
       },
       skip: (pageNum - 1) * limitNum,
       take: limitNum,
@@ -848,7 +851,7 @@ export class SandboxService {
    * @param organizationId - The ID of the organization
    * @param cursor - The cursor to use for pagination, if omitted, will return the newest sandboxes
    * @param limit - The number of sandboxes to return per page
-   * @param filters - The filters to apply to the list
+   * @param filters - The filters to apply
    * @returns The paginated list of sandboxes
    * @throws BadRequestError if the cursor is invalid
    * @throws BadRequestError if the name and states filters are combined
@@ -937,6 +940,75 @@ export class SandboxService {
         return SandboxDto.fromSandbox(sandbox)
       }),
       nextCursor,
+    }
+  }
+
+  /**
+   * Search sandboxes
+   * @param organizationId - The ID of the organization
+   * @param cursor - The cursor to use for pagination, if omitted, will return the newest sandboxes
+   * @param limit - The number of sandboxes to return per page
+   * @param filters - The filters to apply
+   * @returns The paginated list of sandboxes
+   * @throws BadRequestError if the cursor is invalid
+   * @throws BadRequestError if the name and states filters are combined
+   */
+  async search(
+    organizationId: string,
+    cursor: string | undefined,
+    limit: number,
+    filters?: {
+      id?: string
+      name?: string
+      labels?: { [key: string]: string }
+      includeErroredDestroyed?: boolean
+      states?: SandboxState[]
+      snapshots?: string[]
+      regionIds?: string[]
+      minCpu?: number
+      maxCpu?: number
+      minMemoryGiB?: number
+      maxMemoryGiB?: number
+      minDiskGiB?: number
+      maxDiskGiB?: number
+      isPublic?: boolean
+      isRecoverable?: boolean
+      createdAtAfter?: Date
+      createdAtBefore?: Date
+      lastEventAfter?: Date
+      lastEventBefore?: Date
+      sort?: {
+        field?: SandboxSearchSortField
+        direction?: SandboxSearchSortDirection
+      }
+    },
+  ): Promise<PaginatedSandboxesDto> {
+    const {
+      id,
+      name,
+      labels,
+      includeErroredDestroyed,
+      states,
+      snapshots,
+      regionIds,
+      minCpu,
+      maxCpu,
+      minMemoryGiB,
+      maxMemoryGiB,
+      minDiskGiB,
+      maxDiskGiB,
+      isPublic,
+      isRecoverable,
+      createdAtAfter,
+      createdAtBefore,
+      lastEventAfter,
+      lastEventBefore,
+      sort,
+    } = filters || {}
+
+    return {
+      items: [],
+      nextCursor: null,
     }
   }
 
