@@ -63,6 +63,9 @@ func (s *Service) Start(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
+	// Start collector
+	s.collector.Start(ctx)
+
 	// Send initial healthcheck immediately
 	if err := s.sendHealthcheck(ctx); err != nil {
 		s.log.Warn("Failed to send initial healthcheck", slog.Any("error", err))
@@ -95,6 +98,7 @@ func (s *Service) sendHealthcheck(ctx context.Context) error {
 		s.log.Warn("Failed to collect metrics", slog.Any("error", err))
 	} else {
 		metricsPtr = &apiclient.RunnerHealthMetrics{
+			CurrentCpuLoadAverage:        m.CPULoadAverage,
 			CurrentCpuUsagePercentage:    m.CPUUsagePercentage,
 			CurrentMemoryUsagePercentage: m.MemoryUsagePercentage,
 			CurrentDiskUsagePercentage:   m.DiskUsagePercentage,
