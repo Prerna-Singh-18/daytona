@@ -5,9 +5,9 @@
 
 import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { In, IsNull, Repository } from 'typeorm'
+import { EntityManager, In, IsNull, Repository } from 'typeorm'
 import { DockerRegistry } from '../entities/docker-registry.entity'
-import { CreateDockerRegistryDto } from '../dto/create-docker-registry.dto'
+import { CreateDockerRegistryInternalDto } from '../dto/create-docker-registry-internal.dto'
 import { UpdateDockerRegistryDto } from '../dto/update-docker-registry.dto'
 import { ApiOAuth2 } from '@nestjs/swagger'
 import { RegistryPushAccessDto } from '../../sandbox/dto/registry-push-access-dto'
@@ -20,6 +20,9 @@ import { parseDockerImage } from '../../common/utils/docker-image.util'
 import axios from 'axios'
 import type { AxiosRequestHeaders } from 'axios'
 import { AxiosHeaders } from 'axios'
+import { OnAsyncEvent } from '../../common/decorators/on-async-event.decorator'
+import { RegionEvents } from '../../region/constants/region-events.constant'
+import { RegionCreatedEvent } from '../../region/events/region-created.event'
 
 const AXIOS_TIMEOUT_MS = 3000
 const DOCKER_HUB_REGISTRY = 'registry-1.docker.io'
@@ -48,13 +51,16 @@ export class DockerRegistryService {
   ) {}
 
   async create(
-    createDto: CreateDockerRegistryDto,
+    createDto: CreateDockerRegistryInternalDto,
     organizationId?: string,
     isFallback = false,
+    entityManager?: EntityManager,
   ): Promise<DockerRegistry> {
+    const repository = entityManager ? entityManager.getRepository(DockerRegistry) : this.dockerRegistryRepository
+
     //  set some limit to the number of registries
     if (organizationId) {
-      const registries = await this.dockerRegistryRepository.find({
+      const registries = await repository.find({
         where: { organizationId },
       })
       if (registries.length >= 100) {
@@ -62,17 +68,17 @@ export class DockerRegistryService {
       }
     }
 
-    const registry = this.dockerRegistryRepository.create({
+    const registry = repository.create({
       ...createDto,
       organizationId,
       isFallback,
     })
-    return this.dockerRegistryRepository.save(registry)
+    return repository.save(registry)
   }
 
-  async findAll(organizationId: string): Promise<DockerRegistry[]> {
+  async findAll(organizationId: string, registryType: RegistryType): Promise<DockerRegistry[]> {
     return this.dockerRegistryRepository.find({
-      where: { organizationId },
+      where: { organizationId, registryType },
       order: {
         createdAt: 'DESC',
       },
@@ -802,6 +808,41 @@ export class DockerRegistryService {
       this.logger.error(`Exception when deleting image ${imageName}: ${error.message}`)
       throw error
     }
+  }
+
+  @OnAsyncEvent({
+    event: RegionEvents.CREATED,
+  })
+  async handleRegionCreatedEvent(payload: RegionCreatedEvent): Promise<void> {
+    const { entityManager, region, organizationId } = payload
+
+    if (!region.snapshotManagerUrl) {
+      return
+    }
+
+    await this.create(
+      {
+        name: `${region.name}-backup`,
+        url: region.snapshotManagerUrl,
+        registryType: RegistryType.BACKUP,
+        region: region.id,
+      },
+      organizationId ?? undefined,
+      false,
+      entityManager,
+    )
+
+    await this.create(
+      {
+        name: `${region.name}-internal`,
+        url: region.snapshotManagerUrl,
+        registryType: RegistryType.INTERNAL,
+        region: region.id,
+      },
+      organizationId ?? undefined,
+      false,
+      entityManager,
+    )
   }
 }
 
