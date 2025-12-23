@@ -332,6 +332,28 @@ export class DockerRegistryService {
     return null
   }
 
+  /**
+   * Returns a transient registry that matches the snapshot image name pattern.
+   *
+   * If no matching registry is found, _null_ will be returned.
+   *
+   * @param imageName - The user-provided image.
+   */
+  async findTransientRegistryBySnapshotImageName(imageName: string): Promise<DockerRegistry | null> {
+    const registries = await this.dockerRegistryRepository.find({
+      where: { registryType: RegistryType.TRANSIENT },
+    })
+
+    for (const registry of registries) {
+      const strippedUrl = registry.url.replace(/^(https?:\/\/)/, '')
+      if (imageName.startsWith(strippedUrl)) {
+        return registry
+      }
+    }
+
+    return null
+  }
+
   async getRegistryPushAccess(organizationId: string, userId: string): Promise<RegistryPushAccessDto> {
     const transientRegistry = await this.getDefaultTransientRegistry()
     if (!transientRegistry) {

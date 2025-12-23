@@ -17,7 +17,6 @@ import { RunnerState } from '../enums/runner-state.enum'
 import { SnapshotRunnerState } from '../enums/snapshot-runner-state.enum'
 import { v4 as uuidv4 } from 'uuid'
 import { RunnerNotReadyError } from '../errors/runner-not-ready.error'
-import { RegistryType } from '../../docker-registry/enums/registry-type.enum'
 import { RedisLockProvider } from '../common/redis-lock.provider'
 import { OrganizationService } from '../../organization/services/organization.service'
 import { BuildInfo } from '../entities/build-info.entity'
@@ -641,11 +640,8 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
     await this.updateSnapshotState(snapshot.id, SnapshotState.ACTIVE)
 
     // Best effort removal of old snapshot from transient registry
-    const registry = await this.dockerRegistryService.findOneBySnapshotImageName(
-      snapshot.imageName,
-      snapshot.organizationId,
-    )
-    if (registry && registry.registryType === RegistryType.TRANSIENT) {
+    const registry = await this.dockerRegistryService.findTransientRegistryBySnapshotImageName(snapshot.imageName)
+    if (registry) {
       try {
         await this.dockerRegistryService.removeImage(snapshot.imageName, registry.id)
       } catch (error) {
