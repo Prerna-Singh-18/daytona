@@ -23,6 +23,7 @@ import { AxiosHeaders } from 'axios'
 import { OnAsyncEvent } from '../../common/decorators/on-async-event.decorator'
 import { RegionEvents } from '../../region/constants/region-events.constant'
 import { RegionCreatedEvent } from '../../region/events/region-created.event'
+import { RegionService } from '../../region/services/region.service'
 
 const AXIOS_TIMEOUT_MS = 3000
 const DOCKER_HUB_REGISTRY = 'registry-1.docker.io'
@@ -48,6 +49,7 @@ export class DockerRegistryService {
     private readonly dockerRegistryRepository: Repository<DockerRegistry>,
     @Inject(DOCKER_REGISTRY_PROVIDER)
     private readonly dockerRegistryProvider: IDockerRegistryProvider,
+    private readonly regionService: RegionService,
   ) {}
 
   async create(
@@ -148,7 +150,30 @@ export class DockerRegistryService {
     await this.dockerRegistryRepository.update({ isDefault: true }, { isDefault: false })
   }
 
-  async getDefaultInternalRegistry(): Promise<DockerRegistry | null> {
+  /**
+   * Returns an available internal registry for storing snapshots.
+   *
+   * If a snapshot manager _is_ configured for the region identified by the provided _regionId_, only an internal registry that matches the region snapshot manager can be returned.
+   * If no matching internal registry is found, _null_ will be returned.
+   *
+   * If a snapshot manager _is not_ configured for the provided region or no region is provided, the default internal registry will be returned (if available).
+   * If no default internal registry is found, _null_ will be returned.
+   *
+   * @param regionId - (Optional) The ID of the region.
+   */
+  async getAvailableInternalRegistry(regionId?: string): Promise<DockerRegistry | null> {
+    if (regionId) {
+      const region = await this.regionService.findOne(regionId)
+      if (!region) {
+        return null
+      }
+      if (region.snapshotManagerUrl) {
+        return this.dockerRegistryRepository.findOne({
+          where: { region: regionId, registryType: RegistryType.INTERNAL },
+        })
+      }
+    }
+
     return this.dockerRegistryRepository.findOne({
       where: { isDefault: true, registryType: RegistryType.INTERNAL },
     })

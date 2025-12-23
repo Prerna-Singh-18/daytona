@@ -608,9 +608,14 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
 
     const snapshotInfoResponse = await runnerAdapter.getSnapshotInfo(initialImageRefOnRunner)
 
+    const internalRegistry = await this.dockerRegistryService.getAvailableInternalRegistry(runner.region)
+    if (!internalRegistry) {
+      throw new Error('No internal registry found for snapshot')
+    }
+
     // Process snapshot info in case it had failed or it's a build snapshot
     if (!snapshot.ref) {
-      await this.processSnapshotInfo(snapshot, snapshotInfoResponse)
+      await this.processSnapshotInfo(snapshot, snapshotInfoResponse, internalRegistry)
     }
 
     try {
@@ -662,7 +667,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
     if (!sourceRegistry) {
       sourceRegistry = await this.dockerRegistryService.getDefaultDockerHubRegistry()
     }
-    const destinationRegistry = await this.dockerRegistryService.getDefaultInternalRegistry()
+    const destinationRegistry = await this.dockerRegistryService.getAvailableInternalRegistry(runner.region)
 
     // Using image name for pull instead of the ref
     try {
@@ -715,7 +720,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
 
     try {
       const sourceRegistry = await this.dockerRegistryService.getDefaultDockerHubRegistry()
-      const registry = await this.dockerRegistryService.getDefaultInternalRegistry()
+      const registry = await this.dockerRegistryService.getAvailableInternalRegistry(runner.region)
 
       const runnerAdapter = await this.runnerAdapterFactory.create(runner)
 
@@ -968,10 +973,13 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
     }
   }
 
-  private async processSnapshotInfo(snapshot: Snapshot, snapshotInfoResponse: RunnerSnapshotInfo) {
-    const defaultInternalRegistry = await this.dockerRegistryService.getDefaultInternalRegistry()
-    const sanitizedUrl = defaultInternalRegistry.url.replace(/^https?:\/\//, '')
-    snapshot.ref = `${sanitizedUrl}/${defaultInternalRegistry.project}/daytona-${snapshotInfoResponse.hash}:daytona`
+  private async processSnapshotInfo(
+    snapshot: Snapshot,
+    snapshotInfoResponse: RunnerSnapshotInfo,
+    internalRegistry: DockerRegistry,
+  ) {
+    const sanitizedUrl = internalRegistry.url.replace(/^https?:\/\//, '')
+    snapshot.ref = `${sanitizedUrl}/${internalRegistry.project || 'daytona'}/daytona-${snapshotInfoResponse.hash}:daytona`
 
     const organization = await this.organizationService.findOne(snapshot.organizationId)
     if (!organization) {
