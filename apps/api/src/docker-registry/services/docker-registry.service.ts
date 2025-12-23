@@ -251,6 +251,45 @@ export class DockerRegistryService {
     throw new Error('No backup registry available')
   }
 
+  /**
+   * Returns an internal registry where the snapshot is stored.
+   *
+   * If the provided region has no internal registries, the search will fallback to shared registries.
+   *
+   * If no matching registry is found, _null_ will be returned.
+   *
+   * @param ref - The snapshot ref.
+   * @param preferredRegionId - The ID of the region to prefer when searching for a registry.
+   */
+  async findInternalRegistryBySnapshotRef(ref: string, preferredRegionId: string): Promise<DockerRegistry | null> {
+    let registries = await this.dockerRegistryRepository.find({
+      where: {
+        region: preferredRegionId,
+        registryType: RegistryType.INTERNAL,
+      },
+    })
+
+    // If no registries found in the region, fallback to shared registries
+    if (registries.length === 0) {
+      registries = await this.dockerRegistryRepository.find({
+        where: {
+          organizationId: IsNull(),
+          registryType: RegistryType.INTERNAL,
+        },
+      })
+    }
+
+    // Try to find a registry that matches the snapshot ref pattern
+    for (const registry of registries) {
+      const strippedUrl = registry.url.replace(/^(https?:\/\/)/, '')
+      if (ref.startsWith(strippedUrl)) {
+        return registry
+      }
+    }
+
+    return null
+  }
+
   async findOneBySnapshotImageName(imageName: string, organizationId?: string): Promise<DockerRegistry | null> {
     const whereCondition = organizationId
       ? [

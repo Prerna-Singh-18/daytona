@@ -284,18 +284,23 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
         return
       }
 
-      let dockerRegistry = await this.dockerRegistryService.findOneBySnapshotImageName(snapshot.ref)
+      // regionId -> registry
+      const internalRegistriesMap = new Map<string, DockerRegistry>()
 
-      // If no registry found by image name, use the default internal registry
-      if (!dockerRegistry) {
-        dockerRegistry = await this.dockerRegistryService.getDefaultInternalRegistry()
-        if (!dockerRegistry) {
-          throw new Error('No registry found for snapshot and no default internal registry configured')
+      for (const regionId of [...sharedRegionIds, ...organizationRegionIds]) {
+        const registry = await this.dockerRegistryService.findInternalRegistryBySnapshotRef(snapshot.ref, regionId)
+        if (registry) {
+          internalRegistriesMap.set(regionId, registry)
         }
       }
 
       const results = await Promise.allSettled(
         runnersToPropagateTo.map(async (runner) => {
+          const registry = internalRegistriesMap.get(runner.region)
+          if (!registry) {
+            throw new Error(`No internal registry found for snapshot ${snapshot.ref} in region ${runner.region}`)
+          }
+
           const snapshotRunner = await this.runnerService.getSnapshotRunner(runner.id, snapshot.ref)
 
           try {
@@ -305,7 +310,7 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
                 snapshot.ref,
                 SnapshotRunnerState.PULLING_SNAPSHOT,
               )
-              await this.pullSnapshotRunnerWithRetries(runner, snapshot.ref, dockerRegistry)
+              await this.pullSnapshotRunnerWithRetries(runner, snapshot.ref, registry)
             } else if (snapshotRunner.state === SnapshotRunnerState.PULLING_SNAPSHOT) {
               await this.handleSnapshotRunnerStatePullingSnapshot(snapshotRunner, runner)
             }
@@ -375,8 +380,16 @@ export class SnapshotManager implements TrackableJobExecutions, OnApplicationShu
     const retryTimeoutMinutes = 10
     const retryTimeoutMs = retryTimeoutMinutes * 60 * 1000
     if (Date.now() - snapshotRunner.createdAt.getTime() > retryTimeoutMs) {
-      const dockerRegistry = await this.dockerRegistryService.findOneBySnapshotImageName(snapshotRunner.snapshotRef)
-      await this.pullSnapshotRunnerWithRetries(runner, snapshotRunner.snapshotRef, dockerRegistry)
+      const registry = await this.dockerRegistryService.findInternalRegistryBySnapshotRef(
+        snapshotRunner.snapshotRef,
+        runner.region,
+      )
+      if (!registry) {
+        throw new Error(
+          `No internal registry found for snapshot ${snapshotRunner.snapshotRef} in region ${runner.region}`,
+        )
+      }
+      await this.pullSnapshotRunnerWithRetries(runner, snapshotRunner.snapshotRef, registry)
       return
     }
   }
