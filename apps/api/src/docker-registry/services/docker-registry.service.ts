@@ -369,6 +369,12 @@ export class DockerRegistryService {
     return registry.url.startsWith('http') ? registry.url : `https://${registry.url}`
   }
 
+  /**
+   * Returns a registry found in the database that matches the user-provided image, or a temporary registry config if no matching registry is found.
+   *
+   * @param imageName - The user-provided image.
+   * @param organizationId - (Optional) If provided, the search will include organization-specific registries.
+   */
   private async findRegistryByImageName(imageName: string, organizationId?: string): Promise<DockerRegistry | null> {
     // Remove docker.io prefix since it's the default registry
     imageName = imageName.replace(/^docker\.io\//, '')
@@ -466,6 +472,13 @@ export class DockerRegistryService {
     }
   }
 
+  /**
+   * Returns the details of an image.
+   *
+   * @param image - The user-provided image.
+   * @param organizationId - (Optional) If provided, the search for a registry that matches the user-provided image will include organization-specific registries.
+   * @throws An error if the image details cannot be retrieved.
+   */
   async getImageDetails(image: string, organizationId?: string): Promise<ImageDetails> {
     try {
       // Remove docker.io prefix since it's the default registry
