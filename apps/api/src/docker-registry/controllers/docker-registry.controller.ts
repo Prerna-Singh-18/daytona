@@ -107,6 +107,7 @@ export class DockerRegistryController {
   async findAll(@AuthContext() authContext: OrganizationAuthContext): Promise<DockerRegistryDto[]> {
     const dockerRegistries = await this.dockerRegistryService.findAll(
       authContext.organizationId,
+      // include only registries manually created by the organization
       RegistryType.ORGANIZATION,
     )
     return dockerRegistries.map(DockerRegistryDto.fromDockerRegistry)

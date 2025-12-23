@@ -26,6 +26,7 @@ export class DockerRegistryAccessGuard implements CanActivate {
         throw new ForbiddenException('Request organization ID does not match resource organization ID')
       }
       if (authContext.role !== SystemRole.ADMIN && dockerRegistry.registryType !== RegistryType.ORGANIZATION) {
+        // allow access only to registries manually created by the organization
         throw new ForbiddenException(`Requested registry in not type "${RegistryType.ORGANIZATION}"`)
       }
       request.dockerRegistry = dockerRegistry
