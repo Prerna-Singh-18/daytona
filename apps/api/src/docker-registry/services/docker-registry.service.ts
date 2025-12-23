@@ -5,7 +5,7 @@
 
 import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { InjectRepository } from '@nestjs/typeorm'
-import { EntityManager, In, IsNull, Repository } from 'typeorm'
+import { EntityManager, FindOptionsWhere, In, IsNull, Repository } from 'typeorm'
 import { DockerRegistry } from '../entities/docker-registry.entity'
 import { CreateDockerRegistryInternalDto } from '../dto/create-docker-registry-internal.dto'
 import { UpdateDockerRegistryDto } from '../dto/update-docker-registry.dto'
@@ -290,13 +290,32 @@ export class DockerRegistryService {
     return null
   }
 
-  async findOneBySnapshotImageName(imageName: string, organizationId?: string): Promise<DockerRegistry | null> {
-    const whereCondition = organizationId
-      ? [
-          { organizationId, registryType: In([RegistryType.INTERNAL, RegistryType.ORGANIZATION]) },
-          { organizationId: IsNull(), registryType: In([RegistryType.INTERNAL, RegistryType.ORGANIZATION]) },
-        ]
-      : [{ organizationId: IsNull(), registryType: In([RegistryType.INTERNAL, RegistryType.ORGANIZATION]) }]
+  /**
+   * Returns a registry that can be used as a source to pull the image.
+   *
+   * If the provided region is associated with an organization, the search will only include organization-specific registries.
+   * Otherwise, the search will only include shared registries.
+   *
+   * If no matching registry is found, _null_ will be returned.
+   *
+   * @param imageName - The user-provided image.
+   * @param regionId - The ID of the region which needs access to a source registry.
+   */
+  async findSourceRegistryBySnapshotImageName(imageName: string, regionId: string): Promise<DockerRegistry | null> {
+    const region = await this.regionService.findOne(regionId)
+    if (!region) {
+      return null
+    }
+
+    const whereCondition: FindOptionsWhere<DockerRegistry> = {
+      registryType: In([RegistryType.INTERNAL, RegistryType.ORGANIZATION]),
+    }
+
+    if (region.organizationId) {
+      whereCondition.organizationId = region.organizationId
+    } else {
+      whereCondition.organizationId = IsNull()
+    }
 
     const registries = await this.dockerRegistryRepository.find({
       where: whereCondition,
