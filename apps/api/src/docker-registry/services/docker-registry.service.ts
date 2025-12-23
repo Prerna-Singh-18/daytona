@@ -196,7 +196,32 @@ export class DockerRegistryService {
     })
   }
 
-  async getAvailableBackupRegistry(preferredRegion: string): Promise<DockerRegistry | null> {
+  /**
+   * Returns an available backup registry for storing snapshots.
+   *
+   * If a snapshot manager _is_ configured for the region identified by the provided _preferredRegionId_, only a backup registry that matches the region snapshot manager can be returned.
+   * If no matching backup registry is found, _null_ will be returned.
+   *
+   * If a snapshot manager _is not_ configured for the provided region, a backup registry in the preferred region will be returned (if available).
+   * If no backup registry is found in the preferred region, a fallback backup registry will be returned (if available).
+   * If no fallback backup registry is found, _null_ will be returned.
+   *
+   * @param preferredRegionId - The ID of the preferred region.
+   */
+  async getAvailableBackupRegistry(preferredRegionId: string): Promise<DockerRegistry | null> {
+    const region = await this.regionService.findOne(preferredRegionId)
+
+    if (!region) {
+      return null
+    }
+
+    if (region.snapshotManagerUrl) {
+      // Find a backup registry that matches the region snapshot manager
+      return this.dockerRegistryRepository.findOne({
+        where: { region: preferredRegionId, registryType: RegistryType.BACKUP },
+      })
+    }
+
     const registries = await this.dockerRegistryRepository.find({
       where: { registryType: RegistryType.BACKUP, isDefault: true },
     })
@@ -206,7 +231,7 @@ export class DockerRegistryService {
     }
 
     // Filter registries by preferred region
-    const preferredRegionRegistries = registries.filter((registry) => registry.region === preferredRegion)
+    const preferredRegionRegistries = registries.filter((registry) => registry.region === preferredRegionId)
 
     // If we have registries in the preferred region, randomly select one
     if (preferredRegionRegistries.length > 0) {
