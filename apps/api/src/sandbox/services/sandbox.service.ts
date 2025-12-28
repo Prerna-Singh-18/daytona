@@ -870,7 +870,10 @@ export class SandboxService {
       where.state = In(states)
     }
 
-    let sandboxes = await this.sandboxRepository.find({ where })
+    let sandboxes = await this.sandboxRepository.find({
+      where,
+      relations: ['buildInfo'],
+    })
 
     if (skipReconcilingSandboxes) {
       sandboxes = sandboxes.filter((sandbox) => {
@@ -893,6 +896,7 @@ export class SandboxService {
         ...(organizationId ? { organizationId: organizationId } : {}),
         ...(returnDestroyed ? {} : { state: Not(SandboxState.DESTROYED) }),
       },
+      relations: ['buildInfo'],
     })
 
     if (!sandbox && organizationId) {
@@ -902,6 +906,7 @@ export class SandboxService {
           organizationId: organizationId,
           ...(returnDestroyed ? {} : { state: Not(SandboxState.DESTROYED) }),
         },
+        relations: ['buildInfo'],
       })
     }
 
